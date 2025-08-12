@@ -6,6 +6,8 @@ __pycache__/
 .env/
 venv/
 wandb/
+test_output/
+checkpoints/
 
 # Ignore Jupyter Notebook checkpoints
 .ipynb_checkpoints/
