@@ -17,6 +17,7 @@ from transformers import (
     AutoModelForSequenceClassification,
     Trainer,
     TrainingArguments,
+    EarlyStoppingCallback,
 )
 
 from covid_voices.data import CoronaTweetDataset, load_and_prepare_datasets
@@ -26,7 +27,7 @@ from covid_voices.metrics import compute_metrics
 
 logger = init_logging()
 
-def create_model_and_trainer(tokenized_datasets: DatasetDict, tokenizer: AutoTokenizer):
+def create_model_and_trainer(tokenized_datasets: DatasetDict, tokenizer: AutoTokenizer, config: Config):
     """Create model and trainer."""
     logger.info("Creating model and trainer...")
     
@@ -36,31 +37,35 @@ def create_model_and_trainer(tokenized_datasets: DatasetDict, tokenizer: AutoTok
     
     # Create model
     model = AutoModelForSequenceClassification.from_pretrained(
-        Config.MODEL_NAME,
-        num_labels=num_labels
+        config.MODEL_NAME,
+        num_labels=num_labels,
+        hidden_dropout_prob=config.HIDDEN_DROPOUT_PROB,
+        attention_probs_dropout_prob=config.ATTENTION_PROBS_DROPOUT_PROB,
+        classifier_dropout=config.CLASSIFIER_DROPOUT,
     )
     
 
-    effective_batch_size = Config.BATCH_SIZE // max(Config.NUM_GPUS, 1)
+    effective_batch_size = config.BATCH_SIZE // max(config.NUM_GPUS, 1)
     
     # Training arguments
     training_args = TrainingArguments(
 
-        num_train_epochs=Config.NUM_EPOCHS,
-        lr_scheduler_type="linear",
-        learning_rate=Config.LEARNING_RATE,
+        num_train_epochs=config.NUM_EPOCHS,
+        lr_scheduler_type=config.LR_SCHEDULER_TYPE,
+        learning_rate=config.LEARNING_RATE,
+        weight_decay=config.WEIGHT_DECAY,
         # Splits the batch evenly across devices
         per_device_train_batch_size=effective_batch_size,
         per_device_eval_batch_size=effective_batch_size, 
 
-        output_dir=Config.OUTPUT_DIR,
+        output_dir=config.OUTPUT_DIR,
         do_train=True,
         do_eval=True,
         eval_strategy="epoch",
         save_strategy="best",
         load_best_model_at_end=True,
-        metric_for_best_model="accuracy",
-        greater_is_better=True,
+        metric_for_best_model=config.METRIC_FOR_BEST_MODEL,
+        greater_is_better=config.GREATER_IS_BETTER,
         logging_steps=50,
         save_total_limit=1,
         disable_tqdm=True,      # hide Trainer bars
@@ -75,25 +80,26 @@ def create_model_and_trainer(tokenized_datasets: DatasetDict, tokenizer: AutoTok
         eval_dataset=tokenized_datasets["val"],
         tokenizer=tokenizer,
         compute_metrics=compute_metrics,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=config.EARLY_STOPPING_PATIENCE)],
     )
     
     logger.info("Model and trainer created successfully")
     return model, trainer
 
-def train_model(trainer: Trainer, tokenizer: AutoTokenizer, tokenized_datasets: DatasetDict):
+def train_model(trainer: Trainer, tokenizer: AutoTokenizer, tokenized_datasets: DatasetDict, config: Config):
     """Train the model."""
     logger.info("Starting model training...")
     
     # Initialize wandb
     wandb.init(
-        project=Config.PROJECT_NAME,
-        name=f"{time.strftime('%Y%m%d-%H%M%S')}-{Config.MODEL_NAME}",
+        project=config.PROJECT_NAME,
+        name=f"{time.strftime('%Y%m%d-%H%M%S')}-{config.MODEL_NAME}",
         config={
-            "model_name": Config.MODEL_NAME,
-            "batch_size": Config.BATCH_SIZE,
-            "max_length": Config.MAX_LENGTH,
-            "num_epochs": Config.NUM_EPOCHS,
-            "learning_rate": Config.LEARNING_RATE,
+            "model_name": config.MODEL_NAME,
+            "batch_size": config.BATCH_SIZE,
+            "max_length": config.MAX_LENGTH,
+            "num_epochs": config.NUM_EPOCHS,
+            "learning_rate": config.LEARNING_RATE,
         }
     )
     
@@ -102,7 +108,7 @@ def train_model(trainer: Trainer, tokenizer: AutoTokenizer, tokenized_datasets: 
         trainer.train()
         
         # Save the model
-        model_save_path = os.path.join(Config.OUTPUT_BASE_DIR, Config.MODEL_NAME)
+        model_save_path = os.path.join(config.OUTPUT_BASE_DIR, config.MODEL_NAME)
         ensure_dir(model_save_path)
         
         trainer.save_model(model_save_path)
