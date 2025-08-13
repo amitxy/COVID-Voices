@@ -55,7 +55,7 @@ class Config:
     OPTUNA_OUTPUT_DIR: str = "./optuna_studies/"
 
     # Metrics
-    METRIC_FOR_BEST_MODEL: str = "f1"          # Trainer will look for eval_f1
+    METRIC_FOR_BEST_MODEL: str = "eval_f1"      # Trainer compares on this key
     OPTUNA_OBJECTIVE_METRIC: str = "eval_f1"   # Metric name returned by compute_metrics
     OPTUNA_DIRECTION: str = "maximize"         # "maximize" or "minimize"
     GREATER_IS_BETTER: bool = True if OPTUNA_DIRECTION == "maximize" else False            
@@ -85,7 +85,7 @@ class OptunaConfig:
             "learning_rate": trial.suggest_float("learning_rate", 1e-6, 5e-4, log=True),
 
             # Batch size (considering multi-GPU setup)
-            "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128, 256]),
+            "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128, 256, 512, 1024]),
         
             # Training duration
             "num_epochs": trial.suggest_int("num_epochs", 5, 10),
@@ -102,6 +102,18 @@ class OptunaConfig:
             "classifier_dropout": trial.suggest_float("classifier_dropout", 0.0, 0.3),
             "hidden_dropout_prob": trial.suggest_float("hidden_dropout_prob", 0.0, 0.3),
             "attention_probs_dropout_prob": trial.suggest_float("attention_probs_dropout_prob", 0.0, 0.3),
+
+            # Which eval metric to optimize/select best model by
+            "objective_metric": trial.suggest_categorical(
+                "objective_metric",
+                [
+                    "eval_f1",
+                    "eval_accuracy",
+                    "eval_precision",
+                    "eval_recall",
+                    "eval_roc_auc",
+                ],
+            ),
 
           
         }

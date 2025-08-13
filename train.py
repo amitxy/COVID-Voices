@@ -22,7 +22,7 @@ from transformers import (
 
 from covid_voices.data import CoronaTweetDataset, load_and_prepare_datasets
 from covid_voices.config import Config
-from covid_voices.utils import init_logging, set_seed, ensure_dir
+from covid_voices.utils import init_logging, set_seed, ensure_dir, build_wandb_config
 from covid_voices.metrics import compute_metrics
 
 logger = init_logging()
@@ -90,17 +90,11 @@ def train_model(trainer: Trainer, tokenizer: AutoTokenizer, tokenized_datasets: 
     """Train the model."""
     logger.info("Starting model training...")
     
-    # Initialize wandb
+    # Initialize wandb with rich model/training/data metadata
     wandb.init(
         project=config.PROJECT_NAME,
         name=f"{time.strftime('%Y%m%d-%H%M%S')}-{config.MODEL_NAME}",
-        config={
-            "model_name": config.MODEL_NAME,
-            "batch_size": config.BATCH_SIZE,
-            "max_length": config.MAX_LENGTH,
-            "num_epochs": config.NUM_EPOCHS,
-            "learning_rate": config.LEARNING_RATE,
-        }
+        config=build_wandb_config(trainer, config, tokenized_datasets=tokenized_datasets)
     )
     
     try:

@@ -7,10 +7,12 @@ Optimizes hyperparameters for COVID-19 tweet sentiment classification.
 import optuna
 import logging
 import os
+import time
+import wandb
 from functools import partial
 from covid_voices.config import Config, OptunaConfig
 from covid_voices.data import load_and_prepare_datasets
-from covid_voices.utils import init_logging, set_seed
+from covid_voices.utils import init_logging, set_seed, build_wandb_config
 from train import create_model_and_trainer
 
 # Setup logging
@@ -42,6 +44,11 @@ def objective(trial: optuna.Trial, tokenized_datasets=None, tokenizer=None) -> f
     config.LR_SCHEDULER_TYPE = str(params.get("lr_scheduler_type", config.LR_SCHEDULER_TYPE))
     config.WEIGHT_DECAY = float(params.get("weight_decay", config.WEIGHT_DECAY))
     config.EARLY_STOPPING_PATIENCE = int(params.get("early_stopping_patience", config.EARLY_STOPPING_PATIENCE))
+    # Per-trial metric to optimize/select best
+    objective_metric = params.get("objective_metric", Config.OPTUNA_OBJECTIVE_METRIC)
+    # Keep Config global used by reporting consistent
+    Config.OPTUNA_OBJECTIVE_METRIC = objective_metric
+    config.METRIC_FOR_BEST_MODEL = objective_metric
     config.CLASSIFIER_DROPOUT = float(params["classifier_dropout"])
     config.HIDDEN_DROPOUT_PROB = float(params["hidden_dropout_prob"])
     config.ATTENTION_PROBS_DROPOUT_PROB = float(params["attention_probs_dropout_prob"])
@@ -49,22 +56,35 @@ def objective(trial: optuna.Trial, tokenized_datasets=None, tokenizer=None) -> f
     # Build model and trainer using train.py
     model, trainer = create_model_and_trainer(tokenized_datasets, tokenizer, config)
 
-    # Train and evaluate on validation set
-    trainer.train()
-    metrics = trainer.evaluate(tokenized_datasets["val"])  # returns eval_* keys
-    objective_metric = Config.OPTUNA_OBJECTIVE_METRIC
-    score = float(metrics.get(objective_metric, float("nan")))
-    logger.info(f"Trial {trial.number}: {objective_metric}={score:.6f}")
+    # Initialize W&B for this trial
+    run_name = f"optuna-{trial.number}-{time.strftime('%Y%m%d-%H%M%S')}-{config.MODEL_NAME}"
+    os.environ.setdefault("WANDB_PROJECT", config.PROJECT_NAME)
+    base_cfg = build_wandb_config(trainer, config, tokenized_datasets=None, trial_number=trial.number)
+    wandb.init(project=config.PROJECT_NAME, name=run_name, config=base_cfg)
 
-    # Free GPU memory between trials
     try:
-        import torch
-        del model, trainer
-        torch.cuda.empty_cache()
-    except Exception:
-        pass
-
-    return score
+        # Train and evaluate on validation set
+        trainer.train()
+        metrics = trainer.evaluate(tokenized_datasets["val"])  # returns eval_* keys
+        score = float(metrics.get(objective_metric, float("nan")))
+        logger.info(f"Trial {trial.number}: {objective_metric}={score:.6f}")
+        
+    except Exception as e:
+        logger.error(f"Trial {trial.number} failed: {e}")
+        wandb.log({"error": str(e)})
+        return float("nan")
+    finally:
+        # Finish W&B and free GPU memory between trials
+        try:
+            wandb.finish()
+        except Exception:
+            pass
+        try:
+            import torch
+            del model, trainer
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
 
 
 def create_optuna_study() -> optuna.Study:
