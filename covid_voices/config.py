@@ -121,6 +121,7 @@ class OptunaConfig:
                 n_startup_trials=5,      # Don't prune first 5 trials
                 n_warmup_steps=100,      # Wait 100 steps before pruning
                 interval_steps=50         # Check every 50 steps
+                patience=1  # wait 1 pruning opportunity after the first "bad" signal
             )
         }
     
@@ -129,8 +130,9 @@ class OptunaConfig:
         """Get Optuna sampler configuration for efficient search."""
         return {
             "sampler": optuna.samplers.TPESampler(
-                seed=42,                 # For reproducibility
-                n_startup_trials=10,     # Random search for first 10 trials
-                n_ei_candidates=24       # Number of candidates for EI
+                seed=Config.SEED,                 # For reproducibility
+                n_startup_trials=5,     # Random search for first 10 trials
+                n_ei_candidates=24,       # Number of candidates for Expected Improvement (EI)
+                constant_liar=True,       # To avoid duplicate suggestions:
             )
         }
