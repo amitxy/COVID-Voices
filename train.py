@@ -22,7 +22,7 @@ from transformers import (
 
 from covid_voices.data import CoronaTweetDataset, load_and_prepare_datasets
 from covid_voices.config import Config
-from covid_voices.utils import init_logging, set_seed, ensure_dir, build_wandb_config
+from covid_voices.utils import init_logging, set_seed, ensure_dir, build_wandb_config, log_wandb_config_panel
 from covid_voices.metrics import compute_metrics
 
 logger = init_logging()
@@ -66,7 +66,7 @@ def create_model_and_trainer(tokenized_datasets: DatasetDict, tokenizer: AutoTok
         load_best_model_at_end=True,
         metric_for_best_model=config.METRIC_FOR_BEST_MODEL,
         greater_is_better=config.GREATER_IS_BETTER,
-        logging_steps=50,
+        logging_steps=1000,
         save_total_limit=1,
         disable_tqdm=True,      # hide Trainer bars
         log_level="info",
@@ -96,6 +96,8 @@ def train_model(trainer: Trainer, tokenizer: AutoTokenizer, tokenized_datasets: 
         name=f"{time.strftime('%Y%m%d-%H%M%S')}-{config.MODEL_NAME}",
         config=build_wandb_config(trainer, config, tokenized_datasets=tokenized_datasets)
     )
+    # Log a compact table panel for quick visual scan in W&B
+    log_wandb_config_panel(trainer, config, tokenized_datasets=tokenized_datasets)
     
     try:
         # Train the model
