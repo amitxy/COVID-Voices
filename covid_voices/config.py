@@ -10,8 +10,11 @@ import optuna
 class Config:
     """Configuration class for training parameters with Optuna support."""
     
+    # TODO: ADD METRIC_FOR_BEST_MODEL
+
     # Project settings
-    PROJECT_NAME: str = "corona-NLP-ensemble"
+    # PROJECT_NAME: str = "corona-NLP-ensemble"
+    PROJECT_NAME: str = "TinyBERT_RUN_0"
     MODEL_NAME: str = "huawei-noah/TinyBERT_General_4L_312D"
     
     # Optuna settings
@@ -27,7 +30,7 @@ class Config:
     
     # Training hyperparameters (will be optimized by Optuna)
     BATCH_SIZE: int = 128  # REMOVE
-    NUM_EPOCHS: int = 2
+    NUM_EPOCHS: int = 15
     LEARNING_RATE: float = 2e-5
     LR_SCHEDULER_TYPE: str = "linear"  # one of {"linear", "cosine"}
     WEIGHT_DECAY: float = 0.01
@@ -117,10 +120,12 @@ class OptunaConfig:
     def get_pruning_config() -> dict:
         """Get Optuna pruning configuration for early stopping unpromising trials."""
         return {
-            "pruner": optuna.pruners.MedianPruner(
-                n_startup_trials=5,      # Don't prune first 5 trials
-                n_warmup_steps=100,      # Wait 100 steps before pruning
-                interval_steps=50         # Check every 50 steps
+            "pruner": optuna.pruners.PatientPruner(
+                optuna.pruners.MedianPruner(
+                    n_startup_trials=5,      # Don't prune first 5 trials
+                    n_warmup_steps=100,      # Wait 100 steps before pruning
+                    interval_steps=50         # Check every 50 steps
+                ),
                 patience=1  # wait 1 pruning opportunity after the first "bad" signal
             )
         }
