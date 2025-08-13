@@ -7,12 +7,10 @@ using Hugging Face Transformers and PyTorch.
 """
 
 import os
-import logging
-import numpy as np
 import torch
 import wandb
 from datasets import Dataset, DatasetDict
-import evaluate
+import time
 
 from transformers import (
     AutoTokenizer,
@@ -21,153 +19,12 @@ from transformers import (
     TrainingArguments,
 )
 
-from covid_voices.data.corona_dataset import CoronaTweetDataset
+from covid_voices.data import CoronaTweetDataset, load_and_prepare_datasets
+from covid_voices.config import Config
+from covid_voices.utils import init_logging, set_seed, ensure_dir
+from covid_voices.metrics import compute_metrics
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-
-class Config:
-    """Configuration class for training parameters."""
-    
-    # Model and training
-    MODEL_NAME = "huawei-noah/TinyBERT_General_4L_312D"
-    OUTPUT_BASE_DIR = "./checkpoints/"
-    PROJECT_NAME = "corona-NLP-ensemble"
-    
-    # Training hyperparameters
-    BATCH_SIZE = 128
-    MAX_LENGTH = 280  # max length of tweet
-    NUM_EPOCHS = 5
-    LEARNING_RATE = 2e-5
-    
-    # Data
-    VAL_SIZE = 0.2
-    SEED = 42
-    
-    # Output
-    OUTPUT_DIR = "./test_output"
-    
-    # Device
-    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    NUM_GPUS = torch.cuda.device_count() if torch.cuda.is_available() else 0
-
-
-def set_seed(seed: int) -> None:
-    """Set random seeds for reproducibility."""
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-
-
-def preprocess_tweet(text: str) -> str:
-    """Clean and normalize tweet text."""
-    text = text.lower()
-    text = text.replace('#', 'hashtag_')
-    text = text.replace('@', 'mention_')
-    return text
-
-
-def make_tokenizer(model_name: str, max_length: int = 512):
-    """Factory function to create a tokenizer function."""
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    
-    def tokenize(examples):
-        return tokenizer(
-            examples["text"],
-            # padding=False,
-            padding="max_length",
-            truncation=True,
-            max_length=max_length,
-        )
-    
-    return tokenize, tokenizer
-
-
-def load_and_prepare_datasets() -> dict:
-    """Load and prepare datasets for training."""
-    logger.info("Loading and preparing datasets...")
-    
-    # Load datasets with preprocessing
-    datasets = CoronaTweetDataset.load_datasets(
-        preprocessing=preprocess_tweet,
-        is_val_split=True,
-        val_size=Config.VAL_SIZE,
-        seed=Config.SEED
-    )
-    
-    logger.info(f"Loaded datasets: {list(datasets.keys())}")
-    
-    # Convert to Hugging Face format
-    hf_datasets = DatasetDict({
-        "train": Dataset.from_pandas(datasets["train"].df, preserve_index=False),
-        "val": Dataset.from_pandas(datasets["val"].df, preserve_index=False),
-        "test": Dataset.from_pandas(datasets["test"].df, preserve_index=False)
-    })
-    
-    # Tokenize datasets
-    tokenize_function, tokenizer = make_tokenizer(Config.MODEL_NAME, Config.MAX_LENGTH)
-    columns_to_remove = list(set(hf_datasets["train"].column_names) - {"label"})
-    
-    tokenized_datasets = hf_datasets.map(
-        tokenize_function,
-        batched=True,
-        remove_columns=columns_to_remove,
-        desc="Tokenizing datasets"
-    )
-    
-    logger.info("Datasets prepared successfully")
-    return {
-        "raw_datasets": datasets,
-        "hf_datasets": hf_datasets,
-        "tokenized_datasets": tokenized_datasets,
-        "tokenizer": tokenizer
-    }
-
-
-def compute_metrics(eval_pred: tuple) -> dict:
-    """Compute accuracy, macro-F1, macro-precision, macro-recall for single-label classification."""
-    metric_names = ["accuracy", "f1", "precision", "recall"]
-    metrics = {name: evaluate.load(name) for name in metric_names}
-
-    logits, labels = eval_pred
-    
-    # Ensure tensors are properly shaped for multi-GPU
-    if hasattr(logits, 'cpu'):
-        logits = logits.cpu().numpy()
-    if hasattr(labels, 'cpu'):
-        labels = labels.cpu().numpy()
-    
-    # Handle different tensor shapes from multi-GPU training
-    if len(logits.shape) == 3:
-        logits = logits.reshape(-1, logits.shape[-1])
-    if len(labels.shape) == 2:
-        labels = labels.reshape(-1)
-    
-    # single-label classification: pick the highest logit
-    predictions = np.argmax(logits, axis=-1)
-
-    results = {}
-    # accuracy
-    results.update(metrics["accuracy"].compute(predictions=predictions, references=labels))
-
-    # macro-averaged metrics (multiclass-safe; note: in binary this is macro, not 'positive class' binary)
-    for name in ["f1", "precision", "recall"]:
-        res = metrics[name].compute(
-            predictions=predictions,
-            references=labels,
-            average="macro",
-        )
-        results.update(res)
-
-    return results
-
+logger = init_logging()
 
 def create_model_and_trainer(tokenized_datasets: DatasetDict, tokenizer: AutoTokenizer):
     """Create model and trainer."""
@@ -183,37 +40,31 @@ def create_model_and_trainer(tokenized_datasets: DatasetDict, tokenizer: AutoTok
         num_labels=num_labels
     )
     
-    # Calculate effective batch size per device
+
     effective_batch_size = Config.BATCH_SIZE // max(Config.NUM_GPUS, 1)
     
     # Training arguments
     training_args = TrainingArguments(
-        output_dir=Config.OUTPUT_DIR,
-        eval_strategy="epoch",
-        per_device_train_batch_size=effective_batch_size,
-        per_device_eval_batch_size=effective_batch_size,
+
         num_train_epochs=Config.NUM_EPOCHS,
+        lr_scheduler_type="linear",
         learning_rate=Config.LEARNING_RATE,
+        # Splits the batch evenly across devices
+        per_device_train_batch_size=effective_batch_size,
+        per_device_eval_batch_size=effective_batch_size, 
+
+        output_dir=Config.OUTPUT_DIR,
         do_train=True,
         do_eval=True,
-        save_strategy="epoch",
+        eval_strategy="epoch",
+        save_strategy="best",
         load_best_model_at_end=True,
         metric_for_best_model="accuracy",
         greater_is_better=True,
         logging_steps=50,
-        save_total_limit=3,
-        # Multi-GPU settings
-        dataloader_num_workers=4 * max(Config.NUM_GPUS, 1),  # Scale workers with GPUs
-        dataloader_pin_memory=True,
-        # Fix for multi-GPU tensor gathering issues
-        remove_unused_columns=False,
-        group_by_length=True,
-        # Better handling of distributed training
-        ddp_find_unused_parameters=False,
-        ddp_bucket_cap_mb=25,
-        # Additional fixes for tensor gathering warnings
-        dataloader_drop_last=True,
-        gradient_accumulation_steps=1,
+        save_total_limit=1,
+        disable_tqdm=True,      # hide Trainer bars
+        log_level="info",
     )
     
     # Create trainer
@@ -229,7 +80,6 @@ def create_model_and_trainer(tokenized_datasets: DatasetDict, tokenizer: AutoTok
     logger.info("Model and trainer created successfully")
     return model, trainer
 
-
 def train_model(trainer: Trainer, tokenizer: AutoTokenizer, tokenized_datasets: DatasetDict):
     """Train the model."""
     logger.info("Starting model training...")
@@ -237,8 +87,7 @@ def train_model(trainer: Trainer, tokenizer: AutoTokenizer, tokenized_datasets: 
     # Initialize wandb
     wandb.init(
         project=Config.PROJECT_NAME,
-        name=Config.MODEL_NAME,
-        reinit=True,
+        name=f"{time.strftime('%Y%m%d-%H%M%S')}-{Config.MODEL_NAME}",
         config={
             "model_name": Config.MODEL_NAME,
             "batch_size": Config.BATCH_SIZE,
@@ -254,7 +103,7 @@ def train_model(trainer: Trainer, tokenizer: AutoTokenizer, tokenized_datasets: 
         
         # Save the model
         model_save_path = os.path.join(Config.OUTPUT_BASE_DIR, Config.MODEL_NAME)
-        os.makedirs(model_save_path, exist_ok=True)
+        ensure_dir(model_save_path)
         
         trainer.save_model(model_save_path)
         tokenizer.save_pretrained(model_save_path)
@@ -271,7 +120,6 @@ def train_model(trainer: Trainer, tokenizer: AutoTokenizer, tokenized_datasets: 
         raise
     finally:
         wandb.finish()
-
 
 def main():
     """Main training function."""

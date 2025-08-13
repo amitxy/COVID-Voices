@@ -1,6 +1,6 @@
 import os
 from typing import Optional, Callable, Dict
-
+import logging
 import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset
@@ -17,6 +17,14 @@ DEFAULT_LABEL_MAPPING: Dict[str, int] = {
     "Positive": 3,
     "Extremely Positive": 4,
 }
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+logger = logging.getLogger(__name__)
 
 
 def _validate_columns(processed_df: pd.DataFrame):
@@ -164,128 +172,3 @@ class CoronaTweetDataset(Dataset):
         train_ds = CoronaTweetDataset(preprocessing=self.preprocess, label_mapping=self.label_mapping, processed_df=train_df)
         test_ds = CoronaTweetDataset(preprocessing=self.preprocess, label_mapping=self.label_mapping, processed_df=test_df)
         return train_ds, test_ds
-
-
-
-
-# class CoronaTweetConfig(BuilderConfig):
-#     """Configuration for CoronaTweetDataset builder."""
-
-#     def __init__(
-#         self,
-#         *,
-#         data_files: Optional[Dict[str, str]] = None,
-#         label_mapping: Optional[Dict[str, int]] = None,
-#         **kwargs,
-#     ):
-#         super().__init__(**kwargs)
-#         self.data_files = data_files or {}
-#         self.label_mapping = label_mapping or DEFAULT_LABEL_MAPPING
-
-
-# class CoronaTweetDataset(GeneratorBasedBuilder):
-#     """
-#     Hugging Face dataset builder for the Corona NLP tweets dataset.
-#     """
-
-#     VERSION = datasets.Version("1.0.0")
-#     BUILDER_CONFIG_CLASS = CoronaTweetConfig
-#     DEFAULT_CONFIG_NAME = "default"
-
-#     def _info(self) -> datasets.DatasetInfo:
-#         label_names = [label for label, _ in sorted(self.config.label_mapping.items(), key=lambda kv: kv[1])]
-#         features = Features(
-#             {
-#                 "OriginalTweet": Value("string"),
-#                 "label": ClassLabel(num_classes=len(label_names), names=label_names),
-#                 "Sentiment": Value("string"),
-#             }
-#         )
-#         return datasets.DatasetInfo(
-#             description="Corona NLP tweets with sentiment labels",
-#             features=features,
-#             supervised_keys=("OriginalTweet", "label"),
-#             version=self.VERSION,
-#         )
-
-#     def _split_generators(self, dl_manager) -> list:
-#         # Resolve files from config or defaults
-#         train_path = self.config.data_files.get("train", DATA_TRAIN_PATH)
-#         test_path = self.config.data_files.get("test", DATA_TEST_PATH)
-
-#         return [
-#             SplitGenerator(name=Split.TRAIN, gen_kwargs={"filepath": train_path}),
-#             SplitGenerator(name=Split.TEST, gen_kwargs={"filepath": test_path}),
-#         ]
-
-#     def _generate_examples(self, filepath: str):
-#         """Yield (key, example) tuples from the CSV file."""
-#         df = pd.read_csv(filepath, encoding="latin1")
-
-#         # Ensure required columns exist
-#         required = {"OriginalTweet", "Sentiment"}
-#         missing = required - set(df.columns)
-#         if missing:
-#             raise ValueError(f"Missing required columns in {filepath}: {missing}")
-
-#         # Map sentiment to label ids
-#         df["label"] = df["Sentiment"].map(self.config.label_mapping)
-
-#         for idx, row in df.iterrows():
-#             text = row["OriginalTweet"]
-#             sent = row["Sentiment"]
-#             label = int(row["label"]) if pd.notna(row["label"]) else None
-#             if label is None:
-#                 # Skip rows with unmapped labels
-#                 continue
-#             yield idx, {
-#                 "OriginalTweet": text,
-#                 "label": label,
-#                 "Sentiment": sent,
-#             }
-
-
-# def load_datasets(
-#     data_dir: str = "",
-#     *,
-#     preprocessing: Optional[Callable[[str], str]] = None,
-#     label_mapping: Optional[Dict[str, int]] = None,
-# ) -> DatasetDict:
-#     """
-#     Convenience loader that builds a DatasetDict using the CoronaTweetDataset builder
-#     and applies optional text preprocessing to the OriginalTweet column.
-
-#     Args:
-#         data_dir: Directory containing CSV files (Corona_NLP_train.csv, Corona_NLP_test.csv).
-#         preprocessing: Optional callable(text) -> text applied to OriginalTweet.
-#         label_mapping: Optional sentiment->id mapping; defaults to 5-class mapping.
-
-#     Returns:
-#         DatasetDict with 'train' and 'test' splits.
-#     """
-#     train_path = DATA_TRAIN_PATH if not data_dir else os.path.join(data_dir, "Corona_NLP_train.csv")
-#     test_path = DATA_TEST_PATH if not data_dir else os.path.join(data_dir, "Corona_NLP_test.csv")
-
-#     builder = CoronaTweetDataset(
-#         config=CoronaTweetConfig(
-#             name="default",
-#             data_files={"train": train_path, "test": test_path},
-#             label_mapping=label_mapping or DEFAULT_LABEL_MAPPING,
-#         )
-#     )
-#     builder.download_and_prepare()
-#     ds: DatasetDict = builder.as_dataset()
-
-#     if preprocessing is not None:
-#         # Apply preprocessing with map; handle both batched and non-batched forms
-#         def _preprocess_batch(batch):
-#             texts = batch["OriginalTweet"]
-#             if isinstance(texts, list):
-#                 return {"OriginalTweet": [preprocessing(t) for t in texts]}
-#             else:
-#                 return {"OriginalTweet": preprocessing(texts)}
-
-#         ds = ds.map(_preprocess_batch, batched=True)
-
-#     return ds
-
