@@ -45,7 +45,7 @@ def create_model_and_trainer(tokenized_datasets: DatasetDict, tokenizer: AutoTok
     )
     
 
-    effective_batch_size = config.BATCH_SIZE // max(config.NUM_GPUS, 1)
+    effective_batch_size = max(config.BATCH_SIZE // max(config.NUM_GPUS, 1), 8)
     
     # Training arguments
     training_args = TrainingArguments(
