@@ -51,8 +51,7 @@ class Config:
     # Metrics
     METRIC_FOR_BEST_MODEL: str = "eval_f1"      # Trainer compares on this key
     OPTUNA_OBJECTIVE_METRIC: str = "eval_f1"   # Metric name returned by compute_metrics
-    OPTUNA_DIRECTION: str =   "maximize"      # "maximize" or "minimize"
-    GREATER_IS_BETTER: bool = True if OPTUNA_DIRECTION == "maximize" else False            
+    OPTUNA_DIRECTION: str =   "maximize"      # "maximize" or "minimize"            
 
     # Device settings
     DEVICE: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -70,6 +69,9 @@ class Config:
         d["MODEL_NAME"] = self.MODEL_NAME.split("/")[-1]
         d = {k: v for k, v in d.items() if k not in exclude}
         return d
+    @property
+    def GREATER_IS_BETTER(self) -> bool:
+        return self.OPTUNA_DIRECTION == "maximize"
 
 
 class OptunaConfig:
