@@ -9,7 +9,7 @@ using Hugging Face Transformers and PyTorch.
 import os
 import torch
 import wandb
-from datasets import Dataset, DatasetDict
+from datasets import DatasetDict
 import time
 
 from transformers import (
@@ -20,9 +20,9 @@ from transformers import (
     EarlyStoppingCallback,
 )
 
-from covid_voices.data import CoronaTweetDataset, load_and_prepare_datasets
+from covid_voices.data import load_and_prepare_datasets
 from covid_voices.config import Config
-from covid_voices.utils import init_logging, set_seed, ensure_dir, build_wandb_config, log_wandb_config_panel
+from covid_voices.utils import init_logging, set_seed, ensure_dir
 from covid_voices.metrics import compute_metrics
 
 logger = init_logging()
@@ -50,10 +50,19 @@ def create_model_and_trainer(tokenized_datasets: DatasetDict, tokenizer: AutoTok
     # Training arguments
     training_args = TrainingArguments(
 
-        num_train_epochs=config.NUM_EPOCHS,
+        num_train_epochs=config.NUM_TRAIN_EPOCHS,
         lr_scheduler_type=config.LR_SCHEDULER_TYPE,
         learning_rate=config.LEARNING_RATE,
         weight_decay=config.WEIGHT_DECAY,
+        metric_for_best_model=config.METRIC_FOR_BEST_MODEL,
+        greater_is_better=config.GREATER_IS_BETTER,
+        
+        # New training parameters
+        optim=config.OPTIM,
+        adam_epsilon=config.ADAM_EPS,
+        adam_beta1=config.ADAM_BETA1,
+        adam_beta2=config.ADAM_BETA2,
+        
         # Splits the batch evenly across devices
         per_device_train_batch_size=effective_batch_size,
         per_device_eval_batch_size=effective_batch_size, 
@@ -64,9 +73,7 @@ def create_model_and_trainer(tokenized_datasets: DatasetDict, tokenizer: AutoTok
         eval_strategy="epoch",
         save_strategy="best",
         load_best_model_at_end=True,
-        metric_for_best_model=config.METRIC_FOR_BEST_MODEL,
-        greater_is_better=config.GREATER_IS_BETTER,
-        logging_steps=1000,
+        logging_steps=500,
         save_total_limit=1,
         disable_tqdm=True,      # hide Trainer bars
         log_level="info",
@@ -80,7 +87,9 @@ def create_model_and_trainer(tokenized_datasets: DatasetDict, tokenizer: AutoTok
         eval_dataset=tokenized_datasets["val"],
         tokenizer=tokenizer,
         compute_metrics=compute_metrics,
-        callbacks=[EarlyStoppingCallback(early_stopping_patience=config.EARLY_STOPPING_PATIENCE)],
+        callbacks=[
+            EarlyStoppingCallback(early_stopping_patience=config.EARLY_STOPPING_PATIENCE),
+        ],
     )
     
     logger.info("Model and trainer created successfully")
@@ -90,21 +99,19 @@ def train_model(trainer: Trainer, tokenizer: AutoTokenizer, tokenized_datasets: 
     """Train the model."""
     logger.info("Starting model training...")
     
-    # Initialize wandb with rich model/training/data metadata
     wandb.init(
         project=config.PROJECT_NAME,
         name=f"{time.strftime('%Y%m%d-%H%M%S')}-{config.MODEL_NAME}",
-        config=build_wandb_config(trainer, config, tokenized_datasets=tokenized_datasets)
+        config=config.to_dict()
     )
-    # Log a compact table panel for quick visual scan in W&B
-    log_wandb_config_panel(trainer, config, tokenized_datasets=tokenized_datasets)
+    
     
     try:
         # Train the model
         trainer.train()
         
         # Save the model
-        model_save_path = os.path.join(config.OUTPUT_BASE_DIR, config.MODEL_NAME)
+        model_save_path = os.path.join(config.OUTPUT_BASE_DIR, config.PROJECT_NAME, config.MODEL_NAME, config.TRIAL_NUMBER)
         ensure_dir(model_save_path)
         
         trainer.save_model(model_save_path)

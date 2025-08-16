@@ -17,9 +17,9 @@ class Config:
     TRIAL_NUMBER: int = 0
     # Optuna settings
     USE_OPTUNA: bool = True
-    N_TRIALS: int = 20
+    N_TRIALS: int = 50
     OPTUNA_STUDY_NAME: str = "covid_voices_optimization"
-    OPTUNA_STORAGE: Optional[str] = "sqlite:///optuna_studies/covid_voices_opt_2.db"  # SQLite database path for study persistence
+    OPTUNA_STORAGE: Optional[str] = "sqlite:///optuna_studies/covid_voices_opt_4.db"  # SQLite database path for study persistence
     
     # Data settings
     SEED: int = 42
@@ -28,7 +28,7 @@ class Config:
     
     # Training hyperparameters (will be optimized by Optuna)
     BATCH_SIZE: int = 128  # REMOVE
-    NUM_EPOCHS: int = 15
+    NUM_TRAIN_EPOCHS: int = 15
     LEARNING_RATE: float = 2e-5
     LR_SCHEDULER_TYPE: str = "linear"  # one of {"linear", "cosine"}
     WEIGHT_DECAY: float = 0.01
@@ -98,7 +98,7 @@ class OptunaConfig:
             "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128, 256, 512, 1024]),
         
             # Training duration
-            "num_epochs": 20, #trial.suggest_int("num_epochs", 5, 10),
+            "num_train_epochs": 20, #trial.suggest_int("num_train_epochs", 5, 10),
 
             # Regularization - May add a "zero weight decay" option
             "weight_decay": trial.suggest_float("weight_decay", 1e-6, 1e-1, log=True),
@@ -113,7 +113,7 @@ class OptunaConfig:
             "classifier_dropout": trial.suggest_float("classifier_dropout", 0.0, 0.1),
             "hidden_dropout_prob": trial.suggest_float("hidden_dropout_prob", 0.0, 0.3),
             "attention_probs_dropout_prob": trial.suggest_float("attention_probs_dropout_prob", 0.0, 0.3),
-            "optim": trial.suggest_categorical("optim", ["adamw_torch", "adamw_hf", "adafactor"]),
+            "optim": trial.suggest_categorical("optim", ["adamw_torch", "adamw_torch_fused", "adafactor"]),
             "adam_eps": trial.suggest_float("adam_eps", 1e-8, 1e-4, log=True),
             "adam_beta1": trial.suggest_float("adam_beta1", 0.8, 0.999),
             "adam_beta2": trial.suggest_float("adam_beta2", 0.8, 0.999),
