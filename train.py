@@ -42,6 +42,7 @@ def create_model_and_trainer(tokenized_datasets: DatasetDict, tokenizer: AutoTok
         hidden_dropout_prob=config.HIDDEN_DROPOUT_PROB,
         attention_probs_dropout_prob=config.ATTENTION_PROBS_DROPOUT_PROB,
         classifier_dropout=config.CLASSIFIER_DROPOUT,
+        ignore_mismatched_sizes=True,  # Ignore classifier size mismatch For twitter-roberta-base-sentiment-latest
     )
     
 
@@ -153,10 +154,11 @@ def main():
         tokenizer = datasets["tokenizer"]
         
         # Create model and trainer
-        model, trainer = create_model_and_trainer(tokenized_datasets, tokenizer)
+        config = Config()
+        model, trainer = create_model_and_trainer(tokenized_datasets, tokenizer, config)
         
         # Train the model
-        train_model(trainer, tokenizer, tokenized_datasets)
+        train_model(trainer, tokenizer, tokenized_datasets, config)
         
         logger.info("Training completed successfully!")
         
