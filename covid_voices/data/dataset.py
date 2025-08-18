@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset
 from sklearn.model_selection import train_test_split as sk_train_test_split
+from transformers import AutoTokenizer
 
 DATA_DIR = "data/processed"
 DATA_TRAIN_PATH = f"{DATA_DIR}/Corona_NLP_train.csv"
@@ -27,10 +28,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _validate_columns(processed_df: pd.DataFrame):
-    required_columns = ["OriginalTweet", "Sentiment", "text", "label"]
-    if not all(col in processed_df.columns for col in required_columns):
-        raise ValueError(f"Processed DataFrame must contain the following columns: {required_columns}")
+# def _validate_columns(processed_df: pd.DataFrame):
+#     required_columns = ["OriginalTweet", "Sentiment", "text", "label"]
+#     if not all(col in processed_df.columns for col in required_columns):
+#         raise ValueError(f"Processed DataFrame must contain the following columns: {required_columns}")
 
 
 class CoronaTweetDataset(Dataset):
@@ -42,7 +43,9 @@ class CoronaTweetDataset(Dataset):
                  data_path: str = DATA_TRAIN_PATH,
                  preprocessing: Optional[Callable] = None,
                  label_mapping: Optional[Dict[str, int]] = None,
-                 processed_df: Optional[pd.DataFrame] = None):
+                 processed_df: Optional[pd.DataFrame] = None, 
+                 tokenizer: Optional[AutoTokenizer] = None,
+                 max_len: int = 64):
         """
         Initialize the dataset with raw data and preprocessing options.
 
@@ -58,13 +61,15 @@ class CoronaTweetDataset(Dataset):
         self.preprocess = preprocessing or (lambda x: x)
 
         if processed_df is not None:
-            _validate_columns(processed_df)  # validate columns
             self.df = processed_df.reset_index(drop=True)  # Use provided processed frame as-is
         else:
             # Read and preprocess from file
             self.df = pd.read_csv(data_path, encoding="latin1")
             self.df["text"] = self.df["OriginalTweet"].apply(self.preprocess)
             self.df["label"] = self.df["Sentiment"].map(self.label_mapping)
+
+        self.tokenizer = tokenizer
+        self.max_len = max_len
 
         super().__init__()
 
@@ -79,10 +84,29 @@ class CoronaTweetDataset(Dataset):
             idx (int): Index of the sample to fetch
             
         Returns:
-            dict: A dictionary with text and label
+            dict: A dictionary with input_ids, attention_mask, and label
         """
         row = self.df.iloc[idx]
-        return {"text": row["text"], "label": int(row["label"]) }
+        text, label = row["text"], int(row["label"])
+
+        if self.tokenizer is not None:
+            # Tokenize the text and return the expected format
+            tokenized = self.tokenizer(
+                text, 
+                truncation=True, 
+                padding='max_length', 
+                max_length=self.max_len, 
+                return_tensors='pt'
+            )
+            # Remove the batch dimension since DataLoader will add it
+            return {
+                "input_ids": tokenized["input_ids"].squeeze(0),
+                "attention_mask": tokenized["attention_mask"].squeeze(0),
+                "labels": label
+            }
+        else:
+            # Return raw text if no tokenizer
+            return {"text": text, "label": label}
   
     @property
     def label2id(self) -> Dict[str, int]:
@@ -111,7 +135,9 @@ class CoronaTweetDataset(Dataset):
                       seed: int = 42,
                       data_dir: str = '',
                       preprocessing: Optional[Callable] = None,
-                      label_mapping: Optional[Dict[str, int]] = None):
+                      label_mapping: Optional[Dict[str, int]] = None,
+                      tokenizer: Optional[AutoTokenizer] = None,
+                      max_len: int = 64):
         """
         Factory method to load train/test (and optional val) Torch datasets with consistent parameters.
 
@@ -131,17 +157,17 @@ class CoronaTweetDataset(Dataset):
         test_path = DATA_TEST_PATH if not data_dir else os.path.join(data_dir, "Corona_NLP_test.csv")
        
         # Create dataset instances
-        train_dataset = cls(train_path, preprocessing, label_mapping)
-        test_dataset = cls(test_path, preprocessing, label_mapping)
+        train_dataset = cls(train_path, preprocessing, label_mapping, None, tokenizer, max_len)
+        test_dataset = cls(test_path, preprocessing, label_mapping, None, tokenizer, max_len)
         if not is_val_split:
             return {"train": train_dataset, "test": test_dataset}
 
         # Split train dataset into train and validation
-        train_ds, val_ds = train_dataset.train_test_split(test_size=val_size, seed=seed, stratify=True)
+        train_ds, val_ds = train_dataset.train_test_split(test_size=val_size, seed=seed, stratify=True, tokenizer=tokenizer, max_len=max_len)
         return {"train": train_ds, "val": val_ds, "test": test_dataset}
 
 
-    def train_test_split(self, test_size: float = 0.2, seed: int = 42, stratify: bool = True):
+    def train_test_split(self, test_size: float = 0.2, seed: int = 42, stratify: bool = True, tokenizer: Optional[AutoTokenizer] = None, max_len: int = 64):
         """
         Split this Torch dataset into train and test CoronaTweetDataset instances.
 
@@ -169,6 +195,6 @@ class CoronaTweetDataset(Dataset):
         train_df = self.df.iloc[train_idx].reset_index(drop=True)
         test_df = self.df.iloc[test_idx].reset_index(drop=True)
 
-        train_ds = CoronaTweetDataset(preprocessing=self.preprocess, label_mapping=self.label_mapping, processed_df=train_df)
-        test_ds = CoronaTweetDataset(preprocessing=self.preprocess, label_mapping=self.label_mapping, processed_df=test_df)
+        train_ds = CoronaTweetDataset("", self.preprocess, self.label_mapping, processed_df=train_df, tokenizer=tokenizer, max_len=max_len)
+        test_ds = CoronaTweetDataset("", self.preprocess, self.label_mapping, processed_df=test_df, tokenizer=tokenizer, max_len=max_len)
         return train_ds, test_ds
