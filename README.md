@@ -1,6 +1,6 @@
 # COVID-Voices: COVID-19 Tweet Sentiment Analysis
 
-A comprehensive machine learning project for analyzing sentiment in COVID-19 related tweets using various approaches including Large Language Models (LLMs), fine-tuned transformer models, and model compression techniques.
+A comprehensive NLP/machine learning project for analyzing sentiment in COVID-19 related tweets using various approaches including Large Language Models (LLMs), fine-tuned transformer models, and model compression techniques.
 
 ## 📋 Project Overview
 
@@ -10,7 +10,7 @@ A comprehensive machine learning project for analyzing sentiment in COVID-19 rel
 
 **Main_FT.ipynb**: Fine-tunes transformer models (DeBERTa-v3-base and Twitter-RoBERTa) with hyperparameter optimization using Optuna. Implements both manual training and Hugging Face Trainer approaches with experiment tracking via Weights & Biases.
 
-**Test_Compression.ipynb**: Comprehensive model compression framework comparing quantization (8-bit), pruning (L1 unstructured), and knowledge distillation techniques. Balances model performance with deployment efficiency for resource-constrained environments. **This is where we RUN the tests** on our finetuning models to evaluate compression performance.
+**Test_Compression.ipynb**: Comprehensive model compression framework comparing quantization (8-bit), pruning (L1 unstructured), and knowledge distillation techniques. Balances model performance with deployment efficiency for resource-constrained environments. **This is where we RUN the tests** on our fine-tuned models and where we evaluate compression performance.
 
 ## 🗂️ Project Structure
 
@@ -165,7 +165,7 @@ model_name = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 
 ### 4. Test_Compression.ipynb - Model Compression & Optimization AND TESTING
 
-**Purpose**: Evaluate various model compression techniques to balance performance and efficiency. **This is where we RUN the tests** to compare different compression approaches on our fine-tuned models.
+**Purpose**: Evaluate various model compression techniques to balance performance and efficiency. **This is where we RUN the tests on our fine-tuned models** and where we compare different compression approaches on our fine-tuned models.
 
 **Compression Techniques**:
 - **8-bit Quantization**: Dynamic (CPU) and BitsAndBytes (GPU)
@@ -212,15 +212,17 @@ cfg = CompressConfig(
     model_id="cardiffnlp/twitter-roberta-base-sentiment-latest",  # Change to "microsoft/deberta-v3-base" for DeBERTa models
     weights_path=folder_path,
     num_labels=None,
-    max_len=254,  # Change to 64 for "full_ft_deberta_v3_base" , 128 for "hf_deberta_v3_"/ "full_ft_twitter_roberta", 254 hf_twitter_roberta_{pre or orig}
+    max_len=254,  # Change to 64 for "full_ft_deberta_v3_base" , 128 for "hf_ft_deberta_v3_base_orig"/ "full_ft_twitter_roberta", 254 hf_twitter_roberta_orig
     batch_size=32,
     prune_amount=0.4,
-    do_quantized=True,
-    do_pruned=True,
-    do_kd=True,
+    do_quantized=True, # Change to False if you don't want quantization
+    do_pruned=True, # Change to False if you don't want pruning
+    do_kd=True, Change to False if you don't want knowledge distillation.
     quantization_backend="bnb",
     force_cpu_for_all=False
 )
+
+# NOTE: BY CHANGING ALL do_{} PARAMETERS IN THE ABOVE CONFIG, YOU CAN RUN OUR FINE-TUNED MODELS ON THE TEST SET WITHOUT WAITING FOR THE COMPRESSIONS TO FINISH RUNNING AS WELL.
 
 
 # To run with other models, change these variables:
@@ -259,7 +261,7 @@ print(results.to_string(index=False))                                  # Tempera
 |----------|-------|----------|-------------|-------|
 | **LLM Zero-shot** | DeepSeek-R1 | 32.91% | 28.3% | No training required |
 | **LLM Few-shot** | DeepSeek-R1 | 32.13% | 27.63% | With examples |
-| **Fine-tuned** | DeBERTa-v3-base | ~89% | ~89%+ | Requires training |
+| **Fine-tuned** | DeBERTa-v3-base | ~89% | ~89% | Requires training |
 
 **Note**: Due to poor performance of LLMs in zero-shot and few-shot scenarios, we focused our test set evaluation on the fine-tuned transformer models rather than running comprehensive LLM tests on the final test data.
 
