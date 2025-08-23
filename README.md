@@ -217,12 +217,12 @@ cfg = CompressConfig(
     prune_amount=0.4,
     do_quantized=True, # Change to False if you don't want quantization
     do_pruned=True, # Change to False if you don't want pruning
-    do_kd=True, Change to False if you don't want knowledge distillation.
+    do_kd=True, # Change to False if you don't want knowledge distillation.
     quantization_backend="bnb",
     force_cpu_for_all=False
 )
 
-# NOTE: BY CHANGING ALL do_{} PARAMETERS IN THE ABOVE CONFIG, YOU CAN RUN OUR FINE-TUNED MODELS ON THE TEST SET WITHOUT WAITING FOR THE COMPRESSIONS TO FINISH RUNNING AS WELL.
+# IMPORANT NOTE: BY CHANGING ALL do_{} PARAMETERS IN THE ABOVE CONFIG, YOU CAN RUN OUR FINE-TUNED MODELS ON THE TEST SET WITHOUT WAITING FOR THE COMPRESSIONS TO FINISH RUNNING AS WELL.
 
 
 # To run with other models, change these variables:
