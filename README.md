@@ -10,7 +10,7 @@ A comprehensive machine learning project for analyzing sentiment in COVID-19 rel
 
 **Main_FT.ipynb**: Fine-tunes transformer models (DeBERTa-v3-base and Twitter-RoBERTa) with hyperparameter optimization using Optuna. Implements both manual training and Hugging Face Trainer approaches with experiment tracking via Weights & Biases.
 
-**Test_Compression.ipynb**: Comprehensive model compression framework comparing quantization (8-bit), pruning (L1 unstructured), and knowledge distillation techniques. Balances model performance with deployment efficiency for resource-constrained environments. **This is where we RUN the tests** to evaluate compression performance.
+**Test_Compression.ipynb**: Comprehensive model compression framework comparing quantization (8-bit), pruning (L1 unstructured), and knowledge distillation techniques. Balances model performance with deployment efficiency for resource-constrained environments. **This is where we RUN the tests** on our finetuning models to evaluate compression performance.
 
 ## 🗂️ Project Structure
 
@@ -26,7 +26,7 @@ COVID-Voices/
 
 ### 🧪 Quick Start Guide
 
-For immediate results, jump to our [model compression experiments](#test_compressionipynb---model-compression--optimization) to see performance comparisons across different optimization techniques.
+For immediate results, jump to our [model compression experiments](#4-test_compressionipynb---model-compression--optimization-and-testing) to see performance comparisons across different optimization techniques.
 
 
 ## 📊 Dataset
@@ -124,6 +124,7 @@ outputs = pipe(prompts, max_new_tokens=512, do_sample=False)
 - **Llama-3.1 Zero-shot**: 30.79% accuracy, 27.65% F1-weighted
 - **Llama-3.1 Few-shot**: 31.73% accuracy, 30.19% F1-weighted
 - **DeepSeek-R1 Zero-shot**: 32.91% accuracy, 28.30% F1-weighted
+- **DeepSeek-R1 Zero-shot**: 32.13% accuracy 27.63% F1-weighted
 
 ### 3. Main_FT.ipynb - Fine-tuning Transformer Models
 
@@ -211,7 +212,7 @@ cfg = CompressConfig(
     model_id="cardiffnlp/twitter-roberta-base-sentiment-latest",  # Change to "microsoft/deberta-v3-base" for DeBERTa models
     weights_path=folder_path,
     num_labels=None,
-    max_len=254,  # Change to 64 for DeBERTa models, 128 for some RoBERTa models
+    max_len=254,  # Change to 64 for "full_ft_deberta_v3_base" , 128 for "hf_deberta_v3_"/ "full_ft_twitter_roberta", 254 hf_twitter_roberta_{pre or orig}
     batch_size=32,
     prune_amount=0.4,
     do_quantized=True,
@@ -220,6 +221,7 @@ cfg = CompressConfig(
     quantization_backend="bnb",
     force_cpu_for_all=False
 )
+
 
 # To run with other models, change these variables:
 # For DeBERTa models: 
@@ -273,8 +275,7 @@ print(results.to_string(index=False))                                  # Tempera
 
 ## 📝 Key Findings
 
-1. **LLM Performance**: Current LLMs show moderate performance without fine-tuning
+1. **LLM Performance**: Current LLMs show poor performance without fine-tuning
 2. **Fine-tuning Benefits**: Significant performance improvement over zero-shot approaches
 3. **Compression Trade-offs**: 8-bit quantization provides good balance of size and performance
-4. **Preprocessing Impact**: Advanced preprocessing strategies can improve model performance
 
