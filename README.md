@@ -26,7 +26,7 @@ COVID-Voices/
 
 ### 🧪 Quick Start Guide
 
-For immediate results, jump to our [model compression experiments](#4-test_compressionipynb---model-compression--optimization-and-testing) to see performance comparisons across different optimization techniques.
+For immediate results, jump to our [model compression experiments results](#4-test_compressionipynb---model-compression--optimization-and-testing) to see performance comparisons across different optimization techniques and **evaluations of our fine-tuned models on the test set**.
 
 
 ## 📊 Dataset
