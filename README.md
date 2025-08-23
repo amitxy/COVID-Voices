@@ -10,7 +10,7 @@ A comprehensive machine learning project for analyzing sentiment in COVID-19 rel
 
 **Main_FT.ipynb**: Fine-tunes transformer models (DeBERTa-v3-base and Twitter-RoBERTa) with hyperparameter optimization using Optuna. Implements both manual training and Hugging Face Trainer approaches with experiment tracking via Weights & Biases.
 
-**Test_Compression.ipynb**: Comprehensive model compression framework comparing quantization (8-bit), pruning (L1 unstructured), and knowledge distillation techniques. Balances model performance with deployment efficiency for resource-constrained environments.
+**Test_Compression.ipynb**: Comprehensive model compression framework comparing quantization (8-bit), pruning (L1 unstructured), and knowledge distillation techniques. Balances model performance with deployment efficiency for resource-constrained environments. **This is where we RUN the tests** to evaluate compression performance.
 
 ## 🗂️ Project Structure
 
@@ -23,6 +23,11 @@ COVID-Voices/
 ├── Test_Compression.ipynb         # Model compression and optimization
 └── README.md                      # This file
 ```
+
+### 🧪 Quick Start Guide
+
+For immediate results, jump to our [model compression experiments](#test_compressionipynb---model-compression--optimization) to see performance comparisons across different optimization techniques.
+
 
 ## 📊 Dataset
 
@@ -124,6 +129,8 @@ outputs = pipe(prompts, max_new_tokens=512, do_sample=False)
 
 **Purpose**: Fine-tune pre-trained transformer models for COVID-19 sentiment classification with hyperparameter optimization.
 
+**Available Checkpoints**: Our fine-tuned models are available at [CarmelKron/Model_Checkpoints](https://huggingface.co/CarmelKron/Model_Checkpoints) on Hugging Face Hub.
+
 **Models Supported**:
 - **DeBERTa-v3-base**: Microsoft's advanced transformer
 - **Twitter-RoBERTa**: Domain-specific sentiment model
@@ -139,7 +146,7 @@ outputs = pipe(prompts, max_new_tokens=512, do_sample=False)
 - **Experiment Tracking**: Weights & Biases integration
 
 
-REMOVE:
+
 **Usage Example**:
 ```python
 # Running with different preprocesses
@@ -155,9 +162,9 @@ model_name = "microsoft/deberta-v3-base"
 model_name = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 ```
 
-### 4. Test_Compression.ipynb - Model Compression & Optimization
+### 4. Test_Compression.ipynb - Model Compression & Optimization AND TESTING
 
-**Purpose**: Evaluate various model compression techniques to balance performance and efficiency.
+**Purpose**: Evaluate various model compression techniques to balance performance and efficiency. **This is where we RUN the tests** to compare different compression approaches on our fine-tuned models.
 
 **Compression Techniques**:
 - **8-bit Quantization**: Dynamic (CPU) and BitsAndBytes (GPU)
@@ -166,27 +173,67 @@ model_name = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 
 
 **Usage: Configuration Options**:
+To use this notebook, simply change the following configuration variables in cell 2:
 ```python
-# Change model architecture
-model_id = "microsoft/deberta-v3-base"           # or "cardiffnlp/twitter-roberta-base-sentiment-latest"
+# Load preprocess version of the dataset
+preprocess_number = 1 # can be 1,2,3
+train_df = pd.read_csv(f"Data/Corona_NLP_train_preprocess{preprocess_number}.csv", encoding="latin-1")
+test_df = pd.read_csv(f"Data/Corona_NLP_test_preprocess{preprocess_number}.csv", encoding="latin-1")
 
-# Enable/disable compression techniques
-do_quantized = True/False                        # 8-bit quantization (dynamic CPU or bnb GPU)
-do_pruned = True/False                           # L1 unstructured pruning
-do_kd = True/False                               # Knowledge distillation training
+# for the original (raw) dataset you can just do
+#original_train_df = pd.read_csv(f"Data/Corona_NLP_train.csv", encoding="latin-1")
+#original_test_df = pd.read_csv(f"Data/Corona_NLP_test.csv", encoding="latin-1")
 
-# Quantization backend choice
-quantization_backend = "dynamic"                  # CPU-based (slower but universal)
-quantization_backend = "bnb"                      # GPU-based (faster, requires bitsandbytes)
+train_df = train_df.rename(columns={"OriginalTweet":"text", "Sentiment":"label"})
+test_df  = test_df.rename(columns={"OriginalTweet":"text", "Sentiment":"label"})
 
-# Pruning intensity
-prune_amount = 0.4                               # Remove 40% of weights (0.1 to 0.8)
+label_map = {'Extremely Negative':0,'Negative':1,'Neutral':2,
+             'Positive':3,'Extremely Positive':4}
 
-# Knowledge distillation settings
-kd_student_id = "distilbert-base-uncased"        # Smaller student model
-kd_epochs = 2                                    # Training epochs for student
-kd_alpha = 0.7                                   # Balance between KD and CE loss
-kd_T = 2.0                                       # Temperature for soft targets
+train_df["label"] = train_df.label.map(label_map).astype(int)
+test_df["label"]  = test_df.label.map(label_map).astype(int)
+
+
+repo_id = "CarmelKron/Model_Checkpoints"
+subdir  = "hf_ft_twitter_roberta_orig"  # Change to run with different models: "full_ft_deberta_v3_base", "hf_ft_deberta_v3_base_orig", "full_ft_twitter_roberta"
+
+repo_dir = snapshot_download(
+    repo_id=repo_id,
+    repo_type="model",
+    allow_patterns=[f"{subdir}/*"],
+)
+
+folder_path = str(Path(repo_dir) / subdir)
+print("Folder path:", folder_path)
+
+
+cfg = CompressConfig(
+    model_id="cardiffnlp/twitter-roberta-base-sentiment-latest",  # Change to "microsoft/deberta-v3-base" for DeBERTa models
+    weights_path=folder_path,
+    num_labels=None,
+    max_len=254,  # Change to 64 for DeBERTa models, 128 for some RoBERTa models
+    batch_size=32,
+    prune_amount=0.4,
+    do_quantized=True,
+    do_pruned=True,
+    do_kd=True,
+    quantization_backend="bnb",
+    force_cpu_for_all=False
+)
+
+# To run with other models, change these variables:
+# For DeBERTa models: 
+#   - model_id = "microsoft/deberta-v3-base"
+#   - subdir = "full_ft_deberta_v3_base" or "hf_ft_deberta_v3_base_orig"
+
+# For Twitter-RoBERTa models:
+#   - model_id = "cardiffnlp/twitter-roberta-base-sentiment-latest"  
+#   - subdir = "full_ft_twitter_roberta" or "hf_ft_twitter_roberta_orig"
+
+
+cmp = CompressionComparator(cfg)
+results = cmp.run(test_df=test_df, train_df=train_df)
+print(results.to_string(index=False))                                  # Temperature for soft targets
 ```
 
 **Compression Benefits**:
@@ -208,15 +255,17 @@ kd_T = 2.0                                       # Temperature for soft targets
 
 | Approach | Model | Accuracy | F1-Weighted | Notes |
 |----------|-------|----------|-------------|-------|
-| **LLM Zero-shot** | Llama-3.1-8B | 30.79% | 27.65% | No training required |
-| **LLM Few-shot** | Llama-3.1-8B | 31.73% | 30.19% | With examples |
-| **Fine-tuned** | DeBERTa-v3-base | ~85%+ | ~85%+ | Requires training |
-| **Compressed** | 8-bit Quantized | ~84%+ | ~84%+ | 75% size reduction |
+| **LLM Zero-shot** | DeepSeek-R1 | 32.91% | 28.3% | No training required |
+| **LLM Few-shot** | DeepSeek-R1 | 32.13% | 27.63% | With examples |
+| **Fine-tuned** | DeBERTa-v3-base | ~89% | ~89%+ | Requires training |
+
+**Note**: Due to poor performance of LLMs in zero-shot and few-shot scenarios, we focused our test set evaluation on the fine-tuned transformer models rather than running comprehensive LLM tests on the final test data.
+
 
 ## 🔧 Configuration
 
 ### Model Parameters
-- **Sequence Length**: 64-254 tokens (model-dependent)
+- **Sequence Length**: 64-256 tokens (dataset-dependent)
 - **Batch Size**: 16-64 (GPU memory dependent)
 - **Learning Rate**: 1e-6 to 1e-4
 - **Training Epochs**: 20 with early stopping
