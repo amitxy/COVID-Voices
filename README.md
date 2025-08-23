@@ -1,114 +1,213 @@
-# COVID-Voices: Twitter Sentiment Analysis
+# COVID-Voices: COVID-19 Tweet Sentiment Analysis
 
-## Project Overview
+A comprehensive machine learning project for analyzing sentiment in COVID-19 related tweets using various approaches including Large Language Models (LLMs), fine-tuned transformer models, and model compression techniques.
 
-COVID-Voices analyzes Twitter data related to COVID-19 to understand public sentiment during the pandemic. The project uses machine learning and NLP techniques to classify tweets into sentiment categories and identify trends over time.
+## 📋 Project Overview
 
-## Dataset
+**EDA.ipynb**: Comprehensive data exploration and preprocessing pipeline for COVID-19 tweets. Analyzes sentiment distribution, text characteristics, and implements three preprocessing strategies from basic URL removal to advanced LLM-based content extraction.
 
-This project uses the "Corona NLP" dataset containing tweets related to COVID-19 with sentiment annotations:
+**LLM.ipynb**: Evaluates large language models (Llama-3.1-8B and DeepSeek-R1) for zero-shot and few-shot sentiment classification. Tests different prompting strategies and self-consistency techniques to improve prediction reliability.
 
-- **Source**: Corona NLP dataset
-- **Files**: 
-  - `data/raw/Corona_NLP_train.csv`
-  - `data/raw/Corona_NLP_test.csv`
-- **Sentiment Classes**: Extremely Negative, Negative, Neutral, Positive, Extremely Positive
-- **Encoding**: Latin-1
+**Main_FT.ipynb**: Fine-tunes transformer models (DeBERTa-v3-base and Twitter-RoBERTa) with hyperparameter optimization using Optuna. Implements both manual training and Hugging Face Trainer approaches with experiment tracking via Weights & Biases.
 
-## Project Structure
+**Test_Compression.ipynb**: Comprehensive model compression framework comparing quantization (8-bit), pruning (L1 unstructured), and knowledge distillation techniques. Balances model performance with deployment efficiency for resource-constrained environments.
+
+## 🗂️ Project Structure
 
 ```
 COVID-Voices/
-├── data/
-│   └── raw/               # Original dataset files
-├── covid_voices/          # Main package
-│   └── data/
-│       └── datasets/      # Custom dataset implementations
-├── EDA.ipynb              # Exploratory data analysis notebook
-├── research.ipynb         # Model training and experimentation (separate file for Amit&Carmel )
-└── requirements.txt       # Project dependencies
+├── Data/                          # Dataset files
+├── EDA.ipynb                      # Exploratory data analysis and preprocessing
+├── LLM.ipynb                      # LLM-based sentiment classification
+├── Main_FT.ipynb                  # Fine-tuning transformer models
+├── Test_Compression.ipynb         # Model compression and optimization
+└── README.md                      # This file
 ```
 
-## Features
+## 📊 Dataset
 
-- **Sentiment Analysis**: Classification of tweets into 5 sentiment categories
-- **Exploratory Data Analysis**: Visualizations of sentiment distribution and text characteristics
-- **Model Ensemble**: Training multiple transformer-based models for improved accuracy
-- **Custom Dataset Implementation**: Specialized COVID tweet dataset class with preprocessing
+The project uses the **Corona NLP Tweet Sentiment Analysis** dataset containing:
+- **41,157 training tweets** and test set
+- **5 sentiment classes**: Extremely Negative, Negative, Neutral, Positive, Extremely Positive
+- **Features**: User information, location, tweet text, timestamp, and sentiment labels
+- **Source**: [Kaggle Dataset](https://www.kaggle.com/datasets/datatattle/covid-19-nlp-text-classification/data)
 
-## Models
+## 🔍 Notebook Descriptions
 
-(TO CHANGE)
-The project implements and compares multiple transformer-based models:
-- DistilBERT (base-uncased)
-- TinyBERT (4-layer)
+### 1. EDA.ipynb - Exploratory Data Analysis & Preprocessing
 
-## Installation
+**Purpose**: Comprehensive analysis of the COVID-19 tweet dataset with multiple preprocessing strategies.
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd COVID-Voices
-```
+**Key Features**:
+- **Data Quality Analysis**: Schema validation, null counts, duplicate detection
+- **Sentiment Distribution**: Class balance analysis with visualizations
+- **Text Analysis**: Tweet length distributions, URL/mention/hashtag patterns
+- **Geographic Analysis**: Sentiment patterns by location/country
+- **Advanced Preprocessing**: Three different preprocessing strategies
 
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+**Preprocessing Strategies**:
+1. **Basic**: URL removal, hashtag/mention conversion
+2. **Enhanced**: Emphasizes statistically significant n-grams per sentiment
+3. **Advanced**: URL content extraction and summarization using LLMs
 
-## Usage
-
-### Exploratory Data Analysis
-
-Run the EDA notebook to explore the dataset:
-```bash
-jupyter notebook EDA.ipynb
-```
-
-### Training Models
-
-The research notebook contains the model training pipeline:
-```bash
-jupyter notebook research.ipynb
-```
-
-### Using the Custom Dataset
-
+**Usage Example**:
 ```python
-from covid_voices.data.datasets.corona_dataset import CoronaTweetDataset
+# Load preprocess version of the dataset
+preprocess_number = 1 # can be 1,2,3
+train_df = pd.read_csv(f"Data/Corona_NLP_train_preprocess{preprocess_number}.csv", encoding="latin-1")
+test_df = pd.read_csv(f"Data/Corona_NLP_test_preprocess{preprocess_number}.csv", encoding="latin-1")
 
-# Define preprocessing (optional)
-def preprocess_tweet(text):
-    text = text.lower()
-    text = text.replace('#', 'hashtag_')
-    text = text.replace('@', 'mention_')
-    return text
-    
-# Load datasets with factory method
-datasets = CoronaTweetDataset.load_datasets(preprocessing=preprocess_tweet)
-
-# Access train and test datasets
-train_dataset = datasets["train"]
-test_dataset = datasets["test"]
+# for the original (raw) dataset you can just do
+original_train_df = pd.read_csv(f"Data/Corona_NLP_train.csv", encoding="latin-1")
+original_test_df = pd.read_csv(f"Data/Corona_NLP_test.csv", encoding="latin-1")
 ```
 
-## Results
+**Key Insights**:
+- Slight class imbalance (most tweets are Negative/Positive)
+- ~48% of tweets contain URLs
+- Tweet lengths vary significantly (max 64 words)
 
-The project achieves sentiment classification with the following metrics:
-- Accuracy: [Your model accuracy]
-- F1 Score: [Your model F1 score]
+### 2. LLM.ipynb - Large Language Model Sentiment Classification
 
-## Future Work
+**Purpose**: Evaluate state-of-the-art LLMs for zero-shot and few-shot sentiment classification.
 
-- Implement additional preprocessing techniques
-- Explore other transformer architectures
-- Add temporal analysis to track sentiment changes over time
-- Deploy a demo web application
+**Models Tested**:
+- **Llama-3.1-8B-Instruct**: Meta's instruction-tuned model
+- **DeepSeek-R1-Distill-Qwen-7B**: Distilled reasoning model
 
-## License
+**Approaches**:
+- **Zero-shot**: Direct classification without examples
+- **Few-shot**: Classification with labeled examples
+- **Self-consistency**: Multiple sampling for robust predictions
 
-[Your chosen license]
+**Usage Example**:
+```python
+# Zero-shot classification with Llama
+SYSTEM_PROMPT = "You are a careful annotator for COVID-19 tweet sentiment."
+USER_TEMPLATE = """Classify the sentiment of the tweet below into exactly one of:
+["Extremely Negative","Negative","Neutral","Positive","Extremely Positive"].
 
-## Contributors
+Tweet: {tweet}"""
 
-[Your name or team information]
+# Generate predictions
+prompts = build_prompts(tweets)
+outputs = pipe(prompts, max_new_tokens=512, do_sample=False)
+```
+
+**Performance Results**:
+- **Llama-3.1 Zero-shot**: 30.79% accuracy, 27.65% F1-weighted
+- **Llama-3.1 Few-shot**: 31.73% accuracy, 30.19% F1-weighted
+- **DeepSeek-R1 Zero-shot**: 32.91% accuracy, 28.30% F1-weighted
+
+### 3. Main_FT.ipynb - Fine-tuning Transformer Models
+
+**Purpose**: Fine-tune pre-trained transformer models for COVID-19 sentiment classification with hyperparameter optimization.
+
+**Models Supported**:
+- **DeBERTa-v3-base**: Microsoft's advanced transformer
+- **Twitter-RoBERTa**: Domain-specific sentiment model
+
+**Training Approaches**:
+1. **Manual Training Loop**: Full control over training process
+2. **Hugging Face Trainer**: Standard fine-tuning pipeline
+
+**Key Features**:
+- **Hyperparameter Optimization**: Optuna-based search
+- **Early Stopping**: Prevents overfitting
+- **Model Persistence**: Automatic saving to Hugging Face Hub
+- **Experiment Tracking**: Weights & Biases integration
+
+**Usage Example**:
+```python
+# Manual training with hyperparameter optimization
+def objective(trial):
+    learning_rate = trial.suggest_loguniform("learning_rate", 1e-6, 1e-4)
+    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
+    max_len = trial.suggest_categorical("max_len", [64, 128])
+    
+    # Train model with suggested hyperparameters
+    best_val_accuracy = train_model_with_hyperparams(...)
+    return best_val_accuracy
+
+# Run optimization
+study = optuna.create_study(direction="maximize")
+study.optimize(objective, n_trials=20)
+```
+
+### 4. Test_Compression.ipynb - Model Compression & Optimization
+
+**Purpose**: Evaluate various model compression techniques to balance performance and efficiency.
+
+**Compression Techniques**:
+- **8-bit Quantization**: Dynamic (CPU) and BitsAndBytes (GPU)
+- **Pruning**: L1 unstructured pruning of linear layers
+- **Knowledge Distillation**: Training smaller student models
+
+**Usage Example**:
+```python
+# Configure compression settings
+cfg = CompressConfig(
+    model_id="microsoft/deberta-v3-base",
+    weights_path="path/to/checkpoint",
+    prune_amount=0.4,           # Remove 40% of weights
+    do_quantized=True,          # Enable 8-bit quantization
+    do_pruned=True,             # Enable pruning
+    do_kd=True,                 # Enable knowledge distillation
+    quantization_backend="bnb"   # Use BitsAndBytes backend
+)
+
+# Run compression comparison
+cmp = CompressionComparator(cfg)
+results = cmp.run(test_df=test_df, train_df=train_df)
+print(results)
+```
+
+**Compression Benefits**:
+- **Model Size**: Up to 75% reduction
+- **Inference Speed**: Faster processing with minimal accuracy loss
+- **Memory Usage**: Reduced GPU/CPU memory requirements
+- **Deployment**: Easier deployment on resource-constrained devices
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+```bash
+# Install required packages
+pip install torch transformers pandas numpy scikit-learn
+pip install optuna wandb kagglehub bitsandbytes accelerate
+pip install matplotlib seaborn wordcloud nltk emoji pycountry
+```
+
+### Running the Notebooks
+
+1. **Start with EDA**: Understand your data and choose preprocessing strategy
+2. **Experiment with LLMs**: Test zero-shot and few-shot capabilities
+3. **Fine-tune Models**: Optimize transformer models for your task
+4. **Compress Models**: Balance performance and efficiency
+
+## 📈 Performance Comparison
+
+| Approach | Model | Accuracy | F1-Weighted | Notes |
+|----------|-------|----------|-------------|-------|
+| **LLM Zero-shot** | Llama-3.1-8B | 30.79% | 27.65% | No training required |
+| **LLM Few-shot** | Llama-3.1-8B | 31.73% | 30.19% | With examples |
+| **Fine-tuned** | DeBERTa-v3-base | ~85%+ | ~85%+ | Requires training |
+| **Compressed** | 8-bit Quantized | ~84%+ | ~84%+ | 75% size reduction |
+
+## 🔧 Configuration
+
+### Model Parameters
+- **Sequence Length**: 64-254 tokens (model-dependent)
+- **Batch Size**: 16-64 (GPU memory dependent)
+- **Learning Rate**: 1e-6 to 1e-4
+- **Training Epochs**: 20 with early stopping
+
+
+## 📝 Key Findings
+
+1. **LLM Performance**: Current LLMs show moderate performance without fine-tuning
+2. **Fine-tuning Benefits**: Significant performance improvement over zero-shot approaches
+3. **Compression Trade-offs**: 8-bit quantization provides good balance of size and performance
+4. **Preprocessing Impact**: Advanced preprocessing strategies can improve model performance
+
