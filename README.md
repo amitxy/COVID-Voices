@@ -32,7 +32,17 @@ The project uses the **Corona NLP Tweet Sentiment Analysis** dataset containing:
 - **Features**: User information, location, tweet text, timestamp, and sentiment labels
 - **Source**: [Kaggle Dataset](https://www.kaggle.com/datasets/datatattle/covid-19-nlp-text-classification/data)
 
+
 ## 🔍 Notebook Descriptions
+
+### Prerequisites - please make sure you have all of the required packges
+
+```bash
+# Install required packages
+pip install torch transformers pandas numpy scikit-learn
+pip install optuna wandb kagglehub bitsandbytes accelerate
+pip install matplotlib seaborn wordcloud nltk emoji pycountry
+```
 
 ### 1. EDA.ipynb - Exploratory Data Analysis & Preprocessing
 
@@ -52,6 +62,7 @@ The project uses the **Corona NLP Tweet Sentiment Analysis** dataset containing:
 
 **Usage Example**:
 ```python
+import pandas as pd
 # Load preprocess version of the dataset
 preprocess_number = 1 # can be 1,2,3
 train_df = pd.read_csv(f"Data/Corona_NLP_train_preprocess{preprocess_number}.csv", encoding="latin-1")
@@ -82,12 +93,22 @@ original_test_df = pd.read_csv(f"Data/Corona_NLP_test.csv", encoding="latin-1")
 
 **Usage Example**:
 ```python
+# REQUIRED CELLS TO RUN FIRST:
+# Cell 1: Install packages and imports
+# Cell 2: Configuration setup
+# Cell 3: System prompts
+# Cell 4: Load model + Tokenizer + Pipeline
+# Cell 5: Helpers
+
 # Zero-shot classification with Llama
 SYSTEM_PROMPT = "You are a careful annotator for COVID-19 tweet sentiment."
 USER_TEMPLATE = """Classify the sentiment of the tweet below into exactly one of:
 ["Extremely Negative","Negative","Neutral","Positive","Extremely Positive"].
 
 Tweet: {tweet}"""
+
+# Prepare tweets for classification
+tweets = ["COVID-19 has been really tough on everyone", "I love how people are helping each other"]
 
 # Generate predictions
 prompts = build_prompts(tweets)
@@ -117,21 +138,21 @@ outputs = pipe(prompts, max_new_tokens=512, do_sample=False)
 - **Model Persistence**: Automatic saving to Hugging Face Hub
 - **Experiment Tracking**: Weights & Biases integration
 
+
+REMOVE:
 **Usage Example**:
 ```python
-# Manual training with hyperparameter optimization
-def objective(trial):
-    learning_rate = trial.suggest_loguniform("learning_rate", 1e-6, 1e-4)
-    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
-    max_len = trial.suggest_categorical("max_len", [64, 128])
-    
-    # Train model with suggested hyperparameters
-    best_val_accuracy = train_model_with_hyperparams(...)
-    return best_val_accuracy
+# Running with different preprocesses
+# On cell 3 + 9 change PREPROCESS_VERSION variable depanding on the desired preprocess
+PREPROCESS_VERSION = ""  # Should be empty if you want to use the original dataset,
+# otherwise replace PREPROCESS_VERSION with the following:
+VERSION = 1 # can be 1, 2, 3
+PREPROCESS_VERSION = f"preprocess{VERSION}"
 
-# Run optimization
-study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=20)
+# Running with different models
+# On cell 8 change to one of the following:
+model_name = "microsoft/deberta-v3-base"
+model_name = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 ```
 
 ### 4. Test_Compression.ipynb - Model Compression & Optimization
@@ -147,7 +168,7 @@ study.optimize(objective, n_trials=20)
 ```python
 # Configure compression settings
 cfg = CompressConfig(
-    model_id="microsoft/deberta-v3-base",
+    model_id="microsoft/deberta-v3-base",  # you can change to cardiffnlp/twitter-roberta-base-sentiment-latest
     weights_path="path/to/checkpoint",
     prune_amount=0.4,           # Remove 40% of weights
     do_quantized=True,          # Enable 8-bit quantization
@@ -169,15 +190,6 @@ print(results)
 - **Deployment**: Easier deployment on resource-constrained devices
 
 ## 🚀 Getting Started
-
-### Prerequisites
-
-```bash
-# Install required packages
-pip install torch transformers pandas numpy scikit-learn
-pip install optuna wandb kagglehub bitsandbytes accelerate
-pip install matplotlib seaborn wordcloud nltk emoji pycountry
-```
 
 ### Running the Notebooks
 
