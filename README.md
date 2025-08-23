@@ -164,23 +164,29 @@ model_name = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 - **Pruning**: L1 unstructured pruning of linear layers
 - **Knowledge Distillation**: Training smaller student models
 
-**Usage Example**:
-```python
-# Configure compression settings
-cfg = CompressConfig(
-    model_id="microsoft/deberta-v3-base",  # you can change to cardiffnlp/twitter-roberta-base-sentiment-latest
-    weights_path="path/to/checkpoint",
-    prune_amount=0.4,           # Remove 40% of weights
-    do_quantized=True,          # Enable 8-bit quantization
-    do_pruned=True,             # Enable pruning
-    do_kd=True,                 # Enable knowledge distillation
-    quantization_backend="bnb"   # Use BitsAndBytes backend
-)
 
-# Run compression comparison
-cmp = CompressionComparator(cfg)
-results = cmp.run(test_df=test_df, train_df=train_df)
-print(results)
+**Usage: Configuration Options**:
+```python
+# Change model architecture
+model_id = "microsoft/deberta-v3-base"           # or "cardiffnlp/twitter-roberta-base-sentiment-latest"
+
+# Enable/disable compression techniques
+do_quantized = True/False                        # 8-bit quantization (dynamic CPU or bnb GPU)
+do_pruned = True/False                           # L1 unstructured pruning
+do_kd = True/False                               # Knowledge distillation training
+
+# Quantization backend choice
+quantization_backend = "dynamic"                  # CPU-based (slower but universal)
+quantization_backend = "bnb"                      # GPU-based (faster, requires bitsandbytes)
+
+# Pruning intensity
+prune_amount = 0.4                               # Remove 40% of weights (0.1 to 0.8)
+
+# Knowledge distillation settings
+kd_student_id = "distilbert-base-uncased"        # Smaller student model
+kd_epochs = 2                                    # Training epochs for student
+kd_alpha = 0.7                                   # Balance between KD and CE loss
+kd_T = 2.0                                       # Temperature for soft targets
 ```
 
 **Compression Benefits**:
